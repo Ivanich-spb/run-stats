@@ -22,6 +22,7 @@ make install
 ./run add 5.2km 27:30
 ./run add 10km 58:45 --note "последние 2км умирал"
 ./run add 800m 3:20
+./run add 5,2 27:30
 RUN_UNIT=mi ./run add 3.1 27:30
 ./run week
 ./run month
