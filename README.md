@@ -150,3 +150,8 @@ RUN_DB=/tmp/runs.db ./run week
 ## Роли агентов
 
 См. `developer-manifest.md` для ролей, политик и критериев качества.
+
+## Будущие фичи
+
+Список идей и планируемых улучшений ведется в Issues репозитория:  
+https://github.com/Ivanich-spb/run-stats/issues
