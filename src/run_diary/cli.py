@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import math
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -91,7 +92,10 @@ def parse_distance(raw: str, default_unit: str) -> float:
         value = value[:-1]
         unit = "m"
 
-    distance = float(value)
+    try:
+        distance = float(value)
+    except ValueError as exc:
+        raise click.BadParameter("Некорректная дистанция. Пример: 5.2km или 800m.") from exc
     if unit == "km":
         distance_km = distance
     elif unit == "mi":
@@ -101,6 +105,8 @@ def parse_distance(raw: str, default_unit: str) -> float:
     else:
         raise click.BadParameter("Неизвестная единица расстояния")
 
+    if not math.isfinite(distance_km):
+        raise click.BadParameter("Дистанция должна быть больше нуля")
     if distance_km <= 0:
         raise click.BadParameter("Дистанция должна быть больше нуля")
     return distance_km
@@ -110,8 +116,11 @@ def parse_duration(raw: str) -> int:
     parts = raw.split(":")
     if len(parts) != 2:
         raise click.BadParameter("Ожидается формат ММ:СС")
-    minutes = int(parts[0])
-    seconds = int(parts[1])
+    try:
+        minutes = int(parts[0])
+        seconds = int(parts[1])
+    except ValueError as exc:
+        raise click.BadParameter("Ожидается формат ММ:СС") from exc
     if minutes < 0 or seconds < 0:
         raise click.BadParameter("Длительность должна быть больше нуля")
     if seconds >= 60:
