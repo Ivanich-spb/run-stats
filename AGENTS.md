@@ -50,6 +50,22 @@ Follow this sequence for every task:
 If the task is unclear, stop and report the block; do not proceed.
 Do not fix bugs or make improvements outside the current task scope.
 
+## Workflow Guardrails
+- Keep BDD scenarios as the single source of truth; code follows specs.
+- Run tests after each Red/Green step; do not skip the Red confirmation.
+- Use `main` only; no feature branches.
+- Stop and ask if requirements are ambiguous or conflict with existing behavior.
+
+## Agent Memory
+Store only stable, reusable facts:
+- Preferences (tone, formatting, language).
+- Environment defaults (paths, tooling, workflow rules).
+- Project conventions (naming, commands, BDD rules).
+Do not store:
+- Secrets, tokens, or private data.
+- One-off task details that can go stale.
+- Temporary outputs, logs, or test data.
+
 ## Commit & Pull Request Guidelines
 Commits must show evolution and intent:
 - Use short, imperative, sentence-case messages (for example "Add first run scenario").
