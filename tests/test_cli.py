@@ -20,6 +20,7 @@ scenarios("../features")
 class CliContext:
     db_path: str
     today: str | None = None
+    unit: str | None = None
     last_output: str = ""
     last_exit_code: int = 0
 
@@ -38,6 +39,8 @@ def run_command(context: CliContext, command: str):
     env["RUN_DB"] = context.db_path
     if context.today:
         env["RUN_TODAY"] = context.today
+    if context.unit:
+        env["RUN_UNIT"] = context.unit
 
     result = CliRunner().invoke(cli, args, env=env)
     context.last_output = result.output.strip()
@@ -52,6 +55,16 @@ def today_is(cli_context, date):
 @given(parsers.parse('я добавил пробежку {distance}km за {time}'))
 def add_run(cli_context, distance, time):
     run_command(cli_context, f"run add {distance}km {time}")
+
+
+@given(parsers.parse('я добавил пробежку {distance}mi за {time}'))
+def add_run_miles(cli_context, distance, time):
+    run_command(cli_context, f"run add {distance}mi {time}")
+
+
+@given(parsers.parse('единицы расстояния "{unit}"'))
+def set_unit(cli_context, unit):
+    cli_context.unit = unit
 
 
 @when(parsers.parse('я выполняю "{command}"'))
