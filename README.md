@@ -21,6 +21,8 @@ make install
 ```bash
 ./run add 5.2km 27:30
 ./run add 10km 58:45 --note "последние 2км умирал"
+./run add 800m 3:20
+RUN_UNIT=mi ./run add 3.1 27:30
 ./run week
 ./run month
 ./run best 5km
@@ -53,3 +55,4 @@ RUN_DB=/tmp/runs.db ./run week
 
 - `RUN_DB` — путь к SQLite базе.
 - `RUN_TODAY` — дата "сегодня" в формате `YYYY-MM-DD` (полезно для тестов).
+- `RUN_UNIT` — единицы расстояния по умолчанию: `km` или `mi` (по умолчанию `km`).
