@@ -186,8 +186,11 @@ def format_pace(seconds_per_km: float, unit: str) -> str:
 
 
 def format_duration(total_seconds: int) -> str:
-    minutes = total_seconds // 60
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
     return f"{minutes}:{seconds:02d}"
 
 
