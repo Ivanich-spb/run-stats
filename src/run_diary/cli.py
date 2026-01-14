@@ -114,18 +114,26 @@ def parse_distance(raw: str, default_unit: str) -> float:
 
 def parse_duration(raw: str) -> int:
     parts = raw.split(":")
-    if len(parts) != 2:
-        raise click.BadParameter("Ожидается формат ММ:СС")
+    if len(parts) not in {2, 3}:
+        raise click.BadParameter("Ожидается формат ММ:СС или ЧЧ:ММ:СС")
     try:
-        minutes = int(parts[0])
-        seconds = int(parts[1])
+        if len(parts) == 2:
+            hours = 0
+            minutes = int(parts[0])
+            seconds = int(parts[1])
+        else:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
     except ValueError as exc:
-        raise click.BadParameter("Ожидается формат ММ:СС") from exc
-    if minutes < 0 or seconds < 0:
+        raise click.BadParameter("Ожидается формат ММ:СС или ЧЧ:ММ:СС") from exc
+    if hours < 0 or minutes < 0 or seconds < 0:
         raise click.BadParameter("Длительность должна быть больше нуля")
     if seconds >= 60:
         raise click.BadParameter("Секунды должны быть меньше 60")
-    total = minutes * 60 + seconds
+    if minutes >= 60 and len(parts) == 3:
+        raise click.BadParameter("Минуты должны быть меньше 60")
+    total = hours * 3600 + minutes * 60 + seconds
     if total <= 0:
         raise click.BadParameter("Длительность должна быть больше нуля")
     return total
