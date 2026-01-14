@@ -421,9 +421,13 @@ def compare_weeks(weeks: int):
     title = with_emoji(f"Сравнение за {weeks} недели:", "⚖️")
     lines = [title]
     if last_count == 0:
-        lines.append("Последние недели: нет пробежек")
+        last_line = "Последние недели: нет пробежек, средний темп недоступен"
     else:
         last_pace = last_seconds / last_km
+        last_line = (
+            f"Последние {weeks} недели: {last_count} пробежки, "
+            f"{format_distance(last_km, unit)}, средний темп {format_pace(last_pace, unit)}"
+        )
         last_row = [
             f"Последние {weeks} недели",
             str(last_count),
@@ -432,9 +436,13 @@ def compare_weeks(weeks: int):
         ]
 
     if prev_count == 0:
-        lines.append("Предыдущие недели: нет пробежек")
+        prev_line = "Предыдущие недели: нет пробежек, средний темп недоступен"
     else:
         prev_pace = prev_seconds / prev_km
+        prev_line = (
+            f"Предыдущие {weeks} недели: {prev_count} пробежки, "
+            f"{format_distance(prev_km, unit)}, средний темп {format_pace(prev_pace, unit)}"
+        )
         prev_row = [
             f"Предыдущие {weeks} недели",
             str(prev_count),
@@ -446,6 +454,9 @@ def compare_weeks(weeks: int):
         headers = ["Период", "Пробежки", "Км" if unit == "km" else "Ми", "Средний темп"]
         table = render_table(headers, [last_row, prev_row], align_right={1, 2, 3})
         lines.append(table)
+    else:
+        lines.append(last_line)
+        lines.append(prev_line)
 
     diff = last_km - prev_km
     sign = "+" if diff >= 0 else "-"
