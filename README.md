@@ -10,6 +10,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Альтернатива через Makefile:
+
+```bash
+make install
+```
+
 ## Команды
 
 ```bash
@@ -26,6 +32,12 @@ pip install -r requirements.txt
 
 ```bash
 python -m pytest
+```
+
+Или:
+
+```bash
+make test
 ```
 
 ## Хранилище данных
