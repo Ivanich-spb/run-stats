@@ -73,6 +73,12 @@ def convert_km_to_unit(distance_km: float, unit: str) -> float:
 
 def parse_distance(raw: str, default_unit: str) -> float:
     value = raw.strip().lower()
+    if "," in value and "." in value:
+        raise click.BadParameter("Некорректная дистанция. Используйте точку или запятую.")
+    if value.count(",") > 1 or value.count(".") > 1:
+        raise click.BadParameter("Некорректная дистанция. Пример: 5.2km или 800m.")
+    if "," in value:
+        value = value.replace(",", ".")
     unit = default_unit
     if value.endswith("km"):
         value = value[:-2]
@@ -86,12 +92,17 @@ def parse_distance(raw: str, default_unit: str) -> float:
 
     distance = float(value)
     if unit == "km":
-        return distance
-    if unit == "mi":
-        return distance * KM_PER_MI
-    if unit == "m":
-        return distance / 1000
-    raise click.BadParameter("Неизвестная единица расстояния")
+        distance_km = distance
+    elif unit == "mi":
+        distance_km = distance * KM_PER_MI
+    elif unit == "m":
+        distance_km = distance / 1000
+    else:
+        raise click.BadParameter("Неизвестная единица расстояния")
+
+    if distance_km <= 0:
+        raise click.BadParameter("Дистанция должна быть больше нуля")
+    return distance_km
 
 
 def parse_duration(raw: str) -> int:
@@ -100,9 +111,14 @@ def parse_duration(raw: str) -> int:
         raise click.BadParameter("Ожидается формат ММ:СС")
     minutes = int(parts[0])
     seconds = int(parts[1])
+    if minutes < 0 or seconds < 0:
+        raise click.BadParameter("Длительность должна быть больше нуля")
     if seconds >= 60:
         raise click.BadParameter("Секунды должны быть меньше 60")
-    return minutes * 60 + seconds
+    total = minutes * 60 + seconds
+    if total <= 0:
+        raise click.BadParameter("Длительность должна быть больше нуля")
+    return total
 
 
 def format_distance_value(distance_km: float, unit: str) -> str:
