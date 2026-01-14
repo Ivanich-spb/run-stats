@@ -40,6 +40,15 @@ def get_today() -> date:
     return date.today()
 
 
+def parse_run_date(raw: str | None) -> date:
+    if not raw:
+        return get_today()
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise click.BadParameter("Ожидается формат даты ГГГГ-ММ-ДД") from exc
+
+
 def get_db_path() -> str:
     return os.getenv("RUN_DB", "runs.db")
 
@@ -270,8 +279,9 @@ def cli(ctx, no_style: bool, no_color: bool):
 @click.argument("distance")
 @click.argument("duration")
 @click.option("--note", help="Короткая заметка о пробежке")
-def add_run(distance: str, duration: str, note: str | None):
-    run_date = get_today()
+@click.option("--date", "run_date", help="Дата пробежки в формате ГГГГ-ММ-ДД")
+def add_run(distance: str, duration: str, note: str | None, run_date: str | None):
+    run_date = parse_run_date(run_date)
     unit = get_distance_unit()
     distance_km = parse_distance(distance, unit)
     duration_sec = parse_duration(duration)
