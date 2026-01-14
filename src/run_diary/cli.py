@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -191,9 +192,61 @@ def summarize(runs: list[Run]):
     return count, total_km, total_seconds
 
 
+def get_style_settings() -> tuple[bool, bool]:
+    ctx = click.get_current_context(silent=True)
+    if ctx and isinstance(ctx.obj, dict):
+        return bool(ctx.obj.get("style")), bool(ctx.obj.get("color"))
+    return False, False
+
+
+def with_emoji(text: str, emoji: str) -> str:
+    style_enabled, _ = get_style_settings()
+    if style_enabled:
+        return f"{emoji} {text}"
+    return text
+
+
+def style_text(text: str, *, fg: str | None = None, bold: bool = False) -> str:
+    _, color_enabled = get_style_settings()
+    if color_enabled:
+        return click.style(text, fg=fg, bold=bold)
+    return text
+
+
+def style_metric(text: str, *, fg: str = "green") -> str:
+    return style_text(text, fg=fg, bold=True)
+
+
+def render_table(headers: list[str], rows: list[list[str]], align_right: set[int]) -> str:
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for index, value in enumerate(row):
+            widths[index] = max(widths[index], len(value))
+
+    def pad(value: str, width: int, right: bool) -> str:
+        return value.rjust(width) if right else value.ljust(width)
+
+    header_cells = [
+        pad(header, widths[i], i in align_right) for i, header in enumerate(headers)
+    ]
+    header_line = style_text(" | ".join(header_cells), bold=True)
+
+    lines = [header_line]
+    for row in rows:
+        cells = [pad(row[i], widths[i], i in align_right) for i in range(len(headers))]
+        lines.append(" | ".join(cells))
+    return "\n".join(lines)
+
+
 @click.group()
-def cli():
+@click.option("--no-style", is_flag=True, help="Отключить стили и эмодзи")
+@click.option("--no-color", is_flag=True, help="Отключить цвет")
+@click.pass_context
+def cli(ctx, no_style: bool, no_color: bool):
     """Беговой дневник."""
+    style_enabled = sys.stdout.isatty() and not no_style
+    color_enabled = style_enabled and not no_color
+    ctx.obj = {"style": style_enabled, "color": color_enabled}
 
 
 @cli.command("add")
@@ -214,11 +267,10 @@ def add_run(distance: str, duration: str, note: str | None):
     conn.commit()
     conn.close()
 
-    click.echo(
-        f"Записано: {format_distance(distance_km, unit, trim_trailing_zero=True)} за {duration}"
-    )
+    summary = f"Записано: {format_distance(distance_km, unit, trim_trailing_zero=True)} за {duration}"
+    click.echo(with_emoji(summary, "✅"))
     if note:
-        click.echo(f"Заметка: {note}")
+        click.echo(with_emoji(f"Заметка: {note}", "📝"))
 
 
 @cli.command("week")
@@ -238,11 +290,11 @@ def week_summary():
         return
 
     avg_pace = total_seconds / total_km
-    click.echo(
-        "На этой неделе: "
-        f"{count} пробежки, {format_distance(total_km, unit)}, "
-        f"средний темп {format_pace(avg_pace, unit)}"
-    )
+    count_text = style_metric(str(count), fg="cyan")
+    distance_text = style_metric(format_distance(total_km, unit), fg="green")
+    pace_text = style_metric(format_pace(avg_pace, unit), fg="yellow")
+    label = with_emoji("На этой неделе:", "📅")
+    click.echo(f"{label} {count_text} пробежки, {distance_text}, средний темп {pace_text}")
 
 
 @cli.command("month")
@@ -267,11 +319,11 @@ def month_summary():
         return
 
     avg_pace = total_seconds / total_km
-    click.echo(
-        f"За {month_name} {today.year}: "
-        f"{count} пробежки, {format_distance(total_km, unit)}, "
-        f"средний темп {format_pace(avg_pace, unit)}"
-    )
+    count_text = style_metric(str(count), fg="cyan")
+    distance_text = style_metric(format_distance(total_km, unit), fg="green")
+    pace_text = style_metric(format_pace(avg_pace, unit), fg="yellow")
+    label = with_emoji(f"За {month_name} {today.year}:", "🗓️")
+    click.echo(f"{label} {count_text} пробежки, {distance_text}, средний темп {pace_text}")
 
 
 @cli.command("best")
@@ -299,11 +351,13 @@ def best_time(distance: str):
 
     run_date = datetime.strptime(row[0], "%Y-%m-%d").date()
     duration_sec = row[1]
-    click.echo(
-        f"Рекорд на {format_distance(target_km, unit, trim_trailing_zero=True)}: "
-        f"{format_duration(duration_sec)} "
+    distance_text = style_metric(format_distance(target_km, unit, trim_trailing_zero=True))
+    duration_text = style_metric(format_duration(duration_sec), fg="yellow")
+    line = (
+        f"Рекорд на {distance_text}: {duration_text} "
         f"(был {format_date(run_date)})"
     )
+    click.echo(with_emoji(line, "🏆"))
 
 
 @cli.command("progress")
@@ -329,16 +383,16 @@ def progress():
 
     unit = get_distance_unit()
     header_unit = "Ми" if unit == "mi" else "Км"
-    lines = [f"Неделя | Пробежки | {header_unit} | Средний темп"]
+    headers = ["Неделя", "Пробежки", header_unit, "Средний темп"]
+    rows: list[list[str]] = []
     for start in sorted(grouped.keys()):
         count, total_km, total_seconds = summarize(grouped[start])
         avg_pace = total_seconds / total_km
         total_value = format_distance_value(total_km, unit)
-        lines.append(
-            f"{start.isoformat()} | {count} | {total_value} | {format_pace(avg_pace, unit)}"
-        )
+        rows.append([start.isoformat(), str(count), total_value, format_pace(avg_pace, unit)])
 
-    click.echo("\n".join(lines))
+    table = render_table(headers, rows, align_right={1, 2, 3})
+    click.echo(table)
 
 
 @cli.command("compare")
@@ -364,24 +418,34 @@ def compare_weeks(weeks: int):
     last_count, last_km, last_seconds = summarize(last_runs)
     prev_count, prev_km, prev_seconds = summarize(previous_runs)
 
-    lines = [f"Сравнение за {weeks} недели:"]
+    title = with_emoji(f"Сравнение за {weeks} недели:", "⚖️")
+    lines = [title]
     if last_count == 0:
         lines.append("Последние недели: нет пробежек")
     else:
         last_pace = last_seconds / last_km
-        lines.append(
-            f"Последние {weeks} недели: {last_count} пробежки, {format_distance(last_km, unit)}, "
-            f"средний темп {format_pace(last_pace, unit)}"
-        )
+        last_row = [
+            f"Последние {weeks} недели",
+            str(last_count),
+            format_distance_value(last_km, unit),
+            format_pace(last_pace, unit),
+        ]
 
     if prev_count == 0:
         lines.append("Предыдущие недели: нет пробежек")
     else:
         prev_pace = prev_seconds / prev_km
-        lines.append(
-            f"Предыдущие {weeks} недели: {prev_count} пробежки, {format_distance(prev_km, unit)}, "
-            f"средний темп {format_pace(prev_pace, unit)}"
-        )
+        prev_row = [
+            f"Предыдущие {weeks} недели",
+            str(prev_count),
+            format_distance_value(prev_km, unit),
+            format_pace(prev_pace, unit),
+        ]
+
+    if last_count > 0 and prev_count > 0:
+        headers = ["Период", "Пробежки", "Км" if unit == "km" else "Ми", "Средний темп"]
+        table = render_table(headers, [last_row, prev_row], align_right={1, 2, 3})
+        lines.append(table)
 
     diff = last_km - prev_km
     sign = "+" if diff >= 0 else "-"
