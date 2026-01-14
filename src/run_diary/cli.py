@@ -49,6 +49,18 @@ def parse_run_date(raw: str | None) -> date:
         raise click.BadParameter("Ожидается формат даты ГГГГ-ММ-ДД") from exc
 
 
+def parse_month(raw: str) -> tuple[date, date]:
+    try:
+        month_start = datetime.strptime(f"{raw}-01", "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise click.BadParameter("Ожидается формат месяца ГГГГ-ММ") from exc
+    if month_start.month == 12:
+        next_month = month_start.replace(year=month_start.year + 1, month=1, day=1)
+    else:
+        next_month = month_start.replace(month=month_start.month + 1, day=1)
+    return month_start, next_month - timedelta(days=1)
+
+
 def get_db_path() -> str:
     return os.getenv("RUN_DB", "runs.db")
 
@@ -298,6 +310,32 @@ def add_run(distance: str, duration: str, note: str | None, run_date: str | None
     click.echo(with_emoji(summary, "✅"))
     if note:
         click.echo(with_emoji(f"Заметка: {note}", "📝"))
+
+
+@cli.command("delete")
+@click.option("--date", "run_date", help="Дата пробежек для удаления (ГГГГ-ММ-ДД)")
+@click.option("--month", "run_month", help="Месяц для удаления (ГГГГ-ММ)")
+def delete_runs(run_date: str | None, run_month: str | None):
+    if not run_date and not run_month:
+        raise click.BadParameter("Нужно указать --date или --month")
+    if run_date and run_month:
+        raise click.BadParameter("Выберите только один параметр: --date или --month")
+
+    if run_date:
+        start = parse_run_date(run_date)
+        end = start
+    else:
+        start, end = parse_month(run_month)
+
+    conn = connect_db()
+    cursor = conn.execute(
+        "DELETE FROM runs WHERE run_date BETWEEN ? AND ?",
+        (start.isoformat(), end.isoformat()),
+    )
+    conn.commit()
+    conn.close()
+
+    click.echo(f"Удалено пробежек: {cursor.rowcount}")
 
 
 @cli.command("week")
