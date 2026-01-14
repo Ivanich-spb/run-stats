@@ -24,6 +24,8 @@ make install
 ./run add 800m 3:20
 ./run add 5,2 27:30
 RUN_UNIT=mi ./run add 3.1 27:30
+./run --no-style week
+./run --no-color week
 ./run week
 ./run month
 ./run best 5km
@@ -57,3 +59,9 @@ RUN_DB=/tmp/runs.db ./run week
 - `RUN_DB` — путь к SQLite базе.
 - `RUN_TODAY` — дата "сегодня" в формате `YYYY-MM-DD` (полезно для тестов).
 - `RUN_UNIT` — единицы расстояния по умолчанию: `km` или `mi` (по умолчанию `km`).
+
+## Стиль вывода
+
+По умолчанию при запуске в терминале включены цвет и эмодзи. Отключить можно флагами:
+- `--no-style` — без цвета и эмодзи.
+- `--no-color` — без цвета (эмодзи остаются).
