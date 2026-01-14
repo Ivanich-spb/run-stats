@@ -110,4 +110,4 @@ RUN_DB=/tmp/runs.db ./run week
 
 ## Роли агентов
 
-См. `developer-manifest.md` для ролей и правил взаимодействия между агентами.
+См. `developer-manifest.md` для ролей, политик и критериев качества.
