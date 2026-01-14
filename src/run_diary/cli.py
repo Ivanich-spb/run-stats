@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 
 import click
 
+KM_PER_MI = 1.60934
+
 MONTH_NAMES = {
     1: "январь",
     2: "февраль",
@@ -56,11 +58,40 @@ def connect_db() -> sqlite3.Connection:
     return conn
 
 
-def parse_distance(raw: str) -> float:
+def get_distance_unit() -> str:
+    raw = os.getenv("RUN_UNIT", "km").strip().lower()
+    if raw in {"km", "mi"}:
+        return raw
+    raise click.ClickException("Неизвестная единица расстояния. Используйте km или mi.")
+
+
+def convert_km_to_unit(distance_km: float, unit: str) -> float:
+    if unit == "mi":
+        return distance_km / KM_PER_MI
+    return distance_km
+
+
+def parse_distance(raw: str, default_unit: str) -> float:
     value = raw.strip().lower()
+    unit = default_unit
     if value.endswith("km"):
         value = value[:-2]
-    return float(value)
+        unit = "km"
+    elif value.endswith("mi"):
+        value = value[:-2]
+        unit = "mi"
+    elif value.endswith("m"):
+        value = value[:-1]
+        unit = "m"
+
+    distance = float(value)
+    if unit == "km":
+        return distance
+    if unit == "mi":
+        return distance * KM_PER_MI
+    if unit == "m":
+        return distance / 1000
+    raise click.BadParameter("Неизвестная единица расстояния")
 
 
 def parse_duration(raw: str) -> int:
@@ -74,22 +105,29 @@ def parse_duration(raw: str) -> int:
     return minutes * 60 + seconds
 
 
-def format_km(value: float, *, trim_trailing_zero: bool = False) -> str:
-    formatted = f"{value:.1f}"
+def format_distance_value(distance_km: float, unit: str) -> str:
+    return f"{convert_km_to_unit(distance_km, unit):.1f}"
+
+
+def format_distance(distance_km: float, unit: str, *, trim_trailing_zero: bool = False) -> str:
+    formatted = format_distance_value(distance_km, unit)
     if trim_trailing_zero and formatted.endswith(".0"):
         formatted = formatted[:-2]
-    return f"{formatted}км"
+    suffix = "ми" if unit == "mi" else "км"
+    return f"{formatted}{suffix}"
 
 
 def format_date(value: date) -> str:
     return value.strftime("%d.%m.%Y")
 
 
-def format_pace(seconds_per_km: float) -> str:
-    rounded = int(round(seconds_per_km))
+def format_pace(seconds_per_km: float, unit: str) -> str:
+    pace_seconds = seconds_per_km * KM_PER_MI if unit == "mi" else seconds_per_km
+    rounded = int(round(pace_seconds))
     minutes = rounded // 60
     seconds = rounded % 60
-    return f"{minutes}:{seconds:02d}/км"
+    suffix = "ми" if unit == "mi" else "км"
+    return f"{minutes}:{seconds:02d}/{suffix}"
 
 
 def format_duration(total_seconds: int) -> str:
@@ -134,10 +172,7 @@ def summarize(runs: list[Run]):
     count = len(runs)
     total_km = sum(run.distance_km for run in runs)
     total_seconds = sum(run.duration_sec for run in runs)
-    avg_pace = None
-    if total_km > 0:
-        avg_pace = total_seconds / total_km
-    return count, total_km, avg_pace
+    return count, total_km, total_seconds
 
 
 @click.group()
@@ -151,7 +186,8 @@ def cli():
 @click.option("--note", help="Короткая заметка о пробежке")
 def add_run(distance: str, duration: str, note: str | None):
     run_date = get_today()
-    distance_km = parse_distance(distance)
+    unit = get_distance_unit()
+    distance_km = parse_distance(distance, unit)
     duration_sec = parse_duration(duration)
 
     conn = connect_db()
@@ -162,7 +198,9 @@ def add_run(distance: str, duration: str, note: str | None):
     conn.commit()
     conn.close()
 
-    click.echo(f"Записано: {format_km(distance_km, trim_trailing_zero=True)} за {duration}")
+    click.echo(
+        f"Записано: {format_distance(distance_km, unit, trim_trailing_zero=True)} за {duration}"
+    )
     if note:
         click.echo(f"Заметка: {note}")
 
@@ -172,19 +210,22 @@ def week_summary():
     today = get_today()
     start = week_start(today)
     end = week_end(today)
+    unit = get_distance_unit()
 
     conn = connect_db()
     runs = fetch_runs(conn, start, end)
     conn.close()
 
-    count, total_km, avg_pace = summarize(runs)
+    count, total_km, total_seconds = summarize(runs)
     if count == 0:
         click.echo("На этой неделе нет пробежек")
         return
 
+    avg_pace = total_seconds / total_km
     click.echo(
         "На этой неделе: "
-        f"{count} пробежки, {format_km(total_km)}, средний темп {format_pace(avg_pace)}"
+        f"{count} пробежки, {format_distance(total_km, unit)}, "
+        f"средний темп {format_pace(avg_pace, unit)}"
     )
 
 
@@ -197,27 +238,31 @@ def month_summary():
     else:
         next_month = today.replace(month=today.month + 1, day=1)
     end = next_month - timedelta(days=1)
+    unit = get_distance_unit()
 
     conn = connect_db()
     runs = fetch_runs(conn, start, end)
     conn.close()
 
-    count, total_km, avg_pace = summarize(runs)
+    count, total_km, total_seconds = summarize(runs)
     month_name = MONTH_NAMES[today.month]
     if count == 0:
         click.echo(f"За {month_name} {today.year}: нет пробежек")
         return
 
+    avg_pace = total_seconds / total_km
     click.echo(
         f"За {month_name} {today.year}: "
-        f"{count} пробежки, {format_km(total_km)}, средний темп {format_pace(avg_pace)}"
+        f"{count} пробежки, {format_distance(total_km, unit)}, "
+        f"средний темп {format_pace(avg_pace, unit)}"
     )
 
 
 @cli.command("best")
 @click.argument("distance")
 def best_time(distance: str):
-    target_km = parse_distance(distance)
+    unit = get_distance_unit()
+    target_km = parse_distance(distance, unit)
     conn = connect_db()
     cursor = conn.execute(
         """
@@ -233,13 +278,13 @@ def best_time(distance: str):
     conn.close()
 
     if not row:
-        click.echo(f"Нет пробежек на {format_km(target_km, trim_trailing_zero=True)}")
+        click.echo(f"Нет пробежек на {format_distance(target_km, unit, trim_trailing_zero=True)}")
         return
 
     run_date = datetime.strptime(row[0], "%Y-%m-%d").date()
     duration_sec = row[1]
     click.echo(
-        f"Рекорд на {format_km(target_km, trim_trailing_zero=True)}: "
+        f"Рекорд на {format_distance(target_km, unit, trim_trailing_zero=True)}: "
         f"{format_duration(duration_sec)} "
         f"(был {format_date(run_date)})"
     )
@@ -266,11 +311,15 @@ def progress():
             Run(run_date=run_day, distance_km=distance_km, duration_sec=duration_sec, note=note)
         )
 
-    lines = ["Неделя | Пробежки | Км | Средний темп"]
+    unit = get_distance_unit()
+    header_unit = "Ми" if unit == "mi" else "Км"
+    lines = [f"Неделя | Пробежки | {header_unit} | Средний темп"]
     for start in sorted(grouped.keys()):
-        count, total_km, avg_pace = summarize(grouped[start])
+        count, total_km, total_seconds = summarize(grouped[start])
+        avg_pace = total_seconds / total_km
+        total_value = format_distance_value(total_km, unit)
         lines.append(
-            f"{start.isoformat()} | {count} | {total_km:.1f} | {format_pace(avg_pace)}"
+            f"{start.isoformat()} | {count} | {total_value} | {format_pace(avg_pace, unit)}"
         )
 
     click.echo("\n".join(lines))
@@ -295,27 +344,32 @@ def compare_weeks(weeks: int):
     previous_runs = fetch_runs(conn, previous_start, previous_end)
     conn.close()
 
-    last_count, last_km, last_pace = summarize(last_runs)
-    prev_count, prev_km, prev_pace = summarize(previous_runs)
+    unit = get_distance_unit()
+    last_count, last_km, last_seconds = summarize(last_runs)
+    prev_count, prev_km, prev_seconds = summarize(previous_runs)
 
     lines = [f"Сравнение за {weeks} недели:"]
     if last_count == 0:
         lines.append("Последние недели: нет пробежек")
     else:
+        last_pace = last_seconds / last_km
         lines.append(
-            f"Последние {weeks} недели: {last_count} пробежки, {format_km(last_km)}, "
-            f"средний темп {format_pace(last_pace)}"
+            f"Последние {weeks} недели: {last_count} пробежки, {format_distance(last_km, unit)}, "
+            f"средний темп {format_pace(last_pace, unit)}"
         )
 
     if prev_count == 0:
         lines.append("Предыдущие недели: нет пробежек")
     else:
+        prev_pace = prev_seconds / prev_km
         lines.append(
-            f"Предыдущие {weeks} недели: {prev_count} пробежки, {format_km(prev_km)}, "
-            f"средний темп {format_pace(prev_pace)}"
+            f"Предыдущие {weeks} недели: {prev_count} пробежки, {format_distance(prev_km, unit)}, "
+            f"средний темп {format_pace(prev_pace, unit)}"
         )
 
     diff = last_km - prev_km
     sign = "+" if diff >= 0 else "-"
-    lines.append(f"Разница по километражу: {sign}{abs(diff):.1f}км")
+    diff_value = format_distance_value(abs(diff), unit)
+    unit_suffix = "ми" if unit == "mi" else "км"
+    lines.append(f"Разница по километражу: {sign}{diff_value}{unit_suffix}")
     click.echo("\n".join(lines))
