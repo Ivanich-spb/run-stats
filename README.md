@@ -1,1 +1,43 @@
 # 🏃 Дневник пробежек
+
+CLI для ведения беговых тренировок: добавление пробежек, недельные/месячные сводки, рекорды и сравнение прогресса.
+
+## Быстрый старт
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Команды
+
+```bash
+./run add 5.2km 27:30
+./run add 10km 58:45 --note "последние 2км умирал"
+./run week
+./run month
+./run best 5km
+./run progress
+./run compare --weeks 4
+```
+
+## Тесты (BDD)
+
+```bash
+python -m pytest
+```
+
+## Хранилище данных
+
+По умолчанию данные сохраняются в `runs.db` в текущей директории.
+Для тестов и отладки можно указать путь через переменную окружения:
+
+```bash
+RUN_DB=/tmp/runs.db ./run week
+```
+
+## Переменные окружения
+
+- `RUN_DB` — путь к SQLite базе.
+- `RUN_TODAY` — дата "сегодня" в формате `YYYY-MM-DD` (полезно для тестов).
