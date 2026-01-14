@@ -85,3 +85,8 @@ def output_equals(cli_context, text):
 @then("вывод равен:")
 def output_equals_block(cli_context, docstring):
     assert cli_context.last_output == docstring.strip()
+
+
+@then(parsers.parse("код возврата равен {code:d}"))
+def exit_code_equals(cli_context, code):
+    assert cli_context.last_exit_code == code
